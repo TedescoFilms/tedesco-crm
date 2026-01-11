@@ -147,9 +147,14 @@ def init_db():
     c.execute("CREATE TABLE IF NOT EXISTS fornitori (id INTEGER PRIMARY KEY AUTOINCREMENT, nome_cognome TEXT, categoria TEXT, paese TEXT, telefono TEXT)")
     c.execute("CREATE TABLE IF NOT EXISTS utenti (username TEXT PRIMARY KEY, password TEXT, ruolo TEXT)")
     
-    # Creazione Admin di default
-    try: c.execute("INSERT INTO utenti (username, password, ruolo) VALUES ('admin', 'admin123', 'admin')")
+       # Creazione Admin di default (Password presa dai Secrets)
+    try:
+        # Prendo user e pass dalla cassaforte segreta
+        safe_user = st.secrets["admin_user"]
+        safe_pass = st.secrets["admin_password"]
+        c.execute("INSERT INTO utenti (username, password, ruolo) VALUES (?, ?, 'admin')", (safe_user, safe_pass))
     except: pass 
+
     
     # Migrazioni colonne se mancano
     try: c.execute("ALTER TABLE progetti ADD COLUMN fee_commerciale REAL"); 
