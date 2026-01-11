@@ -140,7 +140,7 @@ if sel == "DASHBOARD":
 
 
 # ---------------------------
-# PROGETTI (AGGIORNATA: FILTRO CATEGORIE)
+# PROGETTI (AGGIORNATA: PDF SCHEDA TECNICA)
 # ---------------------------
 elif sel == "PROGETTI":
     conn = get_connection()
@@ -149,7 +149,7 @@ elif sel == "PROGETTI":
     with c_sx:
         st.markdown("#### 📂 Archivio")
         
-        # FILTRO CATEGORIA AGGIUNTO
+        # FILTRO CATEGORIA
         cats = ["TUTTI", "EUROPA STUDIO", "VIDEO MUSICALI", "WEDDING", "COMMERCIALE", "ALTRO"]
         if st.session_state["role"] == "europastudio":
             f_cat = "EUROPA STUDIO"
@@ -179,7 +179,7 @@ elif sel == "PROGETTI":
                         st.session_state['selected_pid'] = cur.lastrowid 
                         st.rerun()
 
-        # COSTRUZIONE QUERY CON FILTRI
+        # COSTRUZIONE QUERY
         bq = "SELECT * FROM progetti WHERE 1=1"
         if st.session_state["role"] == "europastudio":
             bq += " AND categoria_progetto='EUROPA STUDIO'"
@@ -191,7 +191,7 @@ elif sel == "PROGETTI":
         
         projs = pd.read_sql_query(bq + " ORDER BY id DESC", conn)
         
-        # LOGICA SELEZIONE ROBUSTA (CALLBACK)
+        # LOGICA SELEZIONE
         if not projs.empty:
             st.markdown("---")
             opts = {row['id']: row['nome_progetto'] for _, row in projs.iterrows()}
@@ -217,7 +217,7 @@ elif sel == "PROGETTI":
             st.caption("Nessun progetto trovato.")
 
     with c_dx:
-        # TRUCCO CONTENITORE VUOTO (SOLUZIONE AL REFRESH)
+        # TRUCCO CONTENITORE VUOTO
         details_container = st.empty()
         
         if pid:
@@ -290,7 +290,7 @@ elif sel == "PROGETTI":
                     if st.button("Salva Equip", key=f"btn_eq_{pid}"): conn.execute("UPDATE dettagli_produzione SET lista_attrezzatura=? WHERE project_id=?", (eq, pid)); conn.commit(); st.toast("Saved")
                 
                 if st.session_state["role"] in ["admin", "europastudio"]:
-                    # SEZIONE PAGAMENTI (FIX PDF)
+                    # SEZIONE PAGAMENTI (RICEVUTA)
                     with t_pay:
                         st.subheader("Gestione Incasso")
                         met = st.radio("Metodo", ["Bonifico Bancario", "PayPal", "Contanti"], horizontal=True, key=f"pay_m_{pid}")
@@ -301,7 +301,7 @@ elif sel == "PROGETTI":
                         elif met == "PayPal": st.info("🅿️ PAYPAL"); st.code(ppl)
                         else: st.info("💵 CONTANTI")
                         st.markdown("---")
-                        if st.button("📄 SCARICA RICEVUTA", key=f"btn_pdf_{pid}"):
+                        if st.button("📄 SCARICA RICEVUTA", key=f"btn_pdf_rec_{pid}"):
                             try:
                                 from reportlab.lib.pagesizes import A4
                                 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
@@ -362,13 +362,69 @@ elif sel == "PROGETTI":
                                 doc.build(story)
                                 bf.seek(0)
                                 st.download_button(
-                                    "Download PDF",
+                                    "Download Ricevuta PDF",
                                     data=bf.getvalue(),
                                     file_name=f"Ricevuta_{pr['nome_progetto'].replace(' ', '_')}.pdf",
                                     mime="application/pdf",
-                                    key=f"dl_{pid}"
+                                    key=f"dl_rec_{pid}"
                                 )
                                 st.success("✅ PDF generato!")
+                            except Exception as e:
+                                st.error(f"❌ Errore PDF: {str(e)}")
+
+                    # SEZIONE SCHEDA TECNICA (RIPRISTINATA)
+                    with t_p:
+                        st.markdown("#### 📄 Scheda Progetto (Call Sheet)")
+                        if st.button("SCARICA SCHEDA TECNICA", key=f"btn_cs_{pid}"):
+                            try:
+                                from reportlab.lib.pagesizes import A4
+                                from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
+                                from reportlab.lib.styles import getSampleStyleSheet
+                                from reportlab.lib import colors
+                                from reportlab.lib.units import cm
+                                bf = BytesIO()
+                                doc = SimpleDocTemplate(bf, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+                                story = []
+                                sty = getSampleStyleSheet()
+                                
+                                # Header
+                                if os.path.exists(lp):
+                                    im = RLImage(lp, width=4*cm, height=1.5*cm)
+                                    im.hAlign = 'LEFT'
+                                    story.append(im)
+                                    story.append(Spacer(1, 10))
+                                
+                                story.append(Paragraph(f"<b>SCHEDA PROGETTO: {pr['nome_progetto']}</b>", sty['Heading1']))
+                                story.append(Paragraph(f"Data Set: {data_ita} | Categoria: {pr['categoria_progetto']}", sty['Normal']))
+                                story.append(Spacer(1, 20))
+                                
+                                # ODG
+                                story.append(Paragraph("<b>ORDINE DEL GIORNO (ODG)</b>", sty['Heading3']))
+                                odg_txt = row['organizzazione'] if row['organizzazione'] else "Nessun dettaglio inserito."
+                                story.append(Paragraph(odg_txt.replace('\n', '<br/>'), sty['Normal']))
+                                story.append(Spacer(1, 20))
+
+                                # NOTE REGIA
+                                story.append(Paragraph("<b>NOTE DI REGIA / GENERALI</b>", sty['Heading3']))
+                                note_txt = row['note_regia'] if row['note_regia'] else "-"
+                                story.append(Paragraph(note_txt.replace('\n', '<br/>'), sty['Normal']))
+                                story.append(Spacer(1, 20))
+
+                                # EQUIPMENT
+                                story.append(Paragraph("<b>LISTA ATTREZZATURA</b>", sty['Heading3']))
+                                eq_txt = row['lista_attrezzatura'] if row['lista_attrezzatura'] else "-"
+                                story.append(Paragraph(eq_txt.replace('\n', '<br/>'), sty['Normal']))
+                                
+                                doc.build(story)
+                                bf.seek(0)
+                                st.download_button(
+                                    "Download Scheda Tecnica",
+                                    data=bf.getvalue(),
+                                    file_name=f"Scheda_{pr['nome_progetto'].replace(' ', '_')}.pdf",
+                                    mime="application/pdf",
+                                    key=f"dl_cs_{pid}"
+                                )
+                                st.success("✅ Scheda generata!")
                             except Exception as e:
                                 st.error(f"❌ Errore PDF: {str(e)}")
 
@@ -381,7 +437,7 @@ elif sel == "PROGETTI":
 
 
 # ---------------------------
-# CLIENTI (AGGIORNATA: MODIFICA + CAMPI COMPLETI)
+# CLIENTI
 # ---------------------------
 elif sel == "CLIENTI":
     conn = get_connection(); st.markdown("### 👥 Clienti")
@@ -473,7 +529,7 @@ elif sel == "CLIENTI":
 
 
 # ---------------------------
-# FORNITORI (AGGIORNATA: RICERCA SMART + EDIT)
+# FORNITORI
 # ---------------------------
 elif sel == "FORNITORI":
     conn = get_connection(); st.markdown("### 🤝 Fornitori")
